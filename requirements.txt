@@ -1,0 +1,4 @@
+datetime==4.3
+schedule==1.2.2
+selenium==4.23.1
+subprocess32==3.5.4
