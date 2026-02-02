@@ -1,4 +1,3 @@
-import auto_login as al
 import clock_in
 def main():
     #al.clock_login()
