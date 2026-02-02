@@ -1,5 +1,4 @@
 # Sesame Auto-Login
-
 This Python script is designed to auto-login and auto-logout of the anoying Sesame application.
 
 ## Required software
@@ -31,10 +30,6 @@ Never post or push this file on internet.
 
 2. **View Console Output:**
 TBD
-   - No Chollos found: 
-        - Message: "No chollos in the market. Save the money for tomorrow!"
-   - Chollos found:
-        - The script will suggest players you should consider signing.
 
 ## Contributing
 Contributions are welcome! Please submit a pull request or open an issue for any bug fixes or improvements.
