@@ -101,24 +101,65 @@ def schedule_clock_out():
     """Schedule clock-out task for 8 hours later"""
     # Schedule clock-out for 8 hours later
     clock_out_time = datetime.now() + timedelta(hours=8)
+    try:
+        # Get the path to clock_out.py
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        clock_out_script = os.path.join(script_dir, "clock_out.py")
+        
+        # Simplified PowerShell command - no complex escaping
+        ps_command = f'''
+$action = New-ScheduledTaskAction -Execute "python.exe" -Argument "{clock_out_script}" -WorkingDirectory "{script_dir}"
+$trigger = New-ScheduledTaskTrigger -Once -At "{clock_out_time.strftime('%H:%M')}"
+Register-ScheduledTask -TaskName "SesameClockOut_{datetime.now().strftime('%Y%m%d_%H%M')}" -Action $action -Trigger $trigger -User "{os.environ['USERNAME']}" -RunLevel Limited -Force
+'''
+        # Debug: Print the command
+        print("Running PowerShell command...")
+        
+        # Run PowerShell
+        result = subprocess.run(['powershell', '-Command', ps_command],
+                                capture_output=True, 
+                                text=True,
+                                encoding='utf-8',
+                                errors='ignore')
+        
+        print(f"PowerShell stdout: {result.stdout}")
+        print(f"PowerShell stderr: {result.stderr}")
+        print(f"Return code: {result.returncode}")
+        
+        if result.returncode == 0:
+            print("✓ Successfully scheduled via PowerShell Task Scheduler")
+            return True
+            
+    except Exception as e:
+        print(f"PowerShell error: {e}")
+        return False
+
     
     # Create a batch file for Windows Task Scheduler
-    if os.name == 'nt':  # Windows
-        bat_content = f"""
-        @echo off
-        cd /d "C:\\path\\to\\your\\script"
-        python clock_out.py
-        """
+    # if os.name == 'nt':  # Windows
+    #     bat_content = f"""
+    #     @echo off
+    #     cd /d "C:\\Git\\sesame-auto-login"
+    #     python clock_out.py
+    #     """
         
-        with open('clock_out.bat', 'w') as f:
-            f.write(bat_content)
+    #     with open('clock_out.bat', 'w') as f:
+    #         f.write(bat_content)
         
-        # Schedule task (Windows)
-        subprocess.run([
-            'schtasks', '/create', '/tn', 'SesametimeClockOut',
-            '/tr', f'C:\\path\\to\\your\\script\\clock_out.bat',
-            '/sc', 'once', '/st', clock_out_time.strftime('%H:%M'),
-            '/sd', clock_out_time.strftime('%m/%d/%Y')
-        ])
-    
+    #     # Schedule task (Windows)
+    #     # subprocess.run([
+    #     #    'schtasks', '/create', '/tn', 'SesametimeClockOut',
+    #     #    '/tr', f'C:\\Git\\sesame-auto-login\\clock_out.bat',
+    #     #    '/sc', 'once', '/st', clock_out_time.strftime('%H:%M'),
+    #     #    '/sd', clock_out_time.strftime('%m/%d/%Y')
+    #     # ])
+    #     at_time = clock_out_time.strftime('%H:%M %m/%d/%Y')
+    #     batch_path = 'C:/Git/sesame-auto-login/clock_out.bat'
+
+    #     # For Git Bash
+    #     subprocess.run([
+    #         'bash', '-c',
+    #         f'echo "cmd /c \'{batch_path}\'" | at {at_time}'
+    #     ])
+
     print(f"Scheduled clock-out for {clock_out_time}")
