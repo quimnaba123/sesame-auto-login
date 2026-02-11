@@ -101,6 +101,11 @@ def schedule_clock_out():
     """Schedule clock-out task for 8 hours later"""
     # Schedule clock-out for 8 hours later
     clock_out_time = datetime.now() + timedelta(hours=8)
+    with open('PrivateData.json') as f:
+        pvdata = json.load(f)
+    win_pwd = pvdata["windows_pwd"]
+    task_name = f"SesameClockOut_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
     try:
         # Get the path to clock_out.py
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -110,7 +115,29 @@ def schedule_clock_out():
         ps_command = f'''
 $action = New-ScheduledTaskAction -Execute "python.exe" -Argument "{clock_out_script}" -WorkingDirectory "{script_dir}"
 $trigger = New-ScheduledTaskTrigger -Once -At "{clock_out_time.strftime('%H:%M')}"
-Register-ScheduledTask -TaskName "SesameClockOut_{datetime.now().strftime('%Y%m%d_%H%M')}" -Action $action -Trigger $trigger -User "{os.environ['USERNAME']}" -RunLevel Limited -Force
+$principal = New-ScheduledTaskPrincipal -UserId "{os.environ['USERNAME']}" -LogonType Password -RunLevel Limited
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable `
+    -WakeToRun `
+    -AllowHardTerminate `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
+    -MultipleInstances IgnoreNew
+
+Register-ScheduledTask -TaskName "{task_name}" `
+    -Action $action `
+    -Trigger $trigger `
+    -Principal $principal `
+    -Settings $settings `
+    -Password "{win_pwd}" `
+    -Force
+
+# Verify the task was created
+$task = Get-ScheduledTask -TaskName "{task_name}"
+Write-Host "Task '$taskName' scheduled for {clock_out_time.strftime('%H:%M')}"
+Write-Host "Logon type: $($task.Principal.LogonType)"
+Write-Host "Will run whether user is logged in or not: YES"
 '''
         # Debug: Print the command
         print("Running PowerShell command...")
@@ -127,7 +154,7 @@ Register-ScheduledTask -TaskName "SesameClockOut_{datetime.now().strftime('%Y%m%
         print(f"Return code: {result.returncode}")
         
         if result.returncode == 0:
-            print("✓ Successfully scheduled via PowerShell Task Scheduler")
+            print(f"\n✓ SUCCESS: Task '{task_name}' scheduled for {clock_out_time}")
             return True
             
     except Exception as e:
