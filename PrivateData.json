@@ -1,4 +1,5 @@
 {
     "user_email": "your_email@company.com",
-    "pwd": "MyPassword123!"
+    "pwd": "MyPassword123!",
+    "windows_pwd": "MyWindowsPassword123!"
 }
