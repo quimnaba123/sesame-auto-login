@@ -13,15 +13,21 @@ import subprocess
 import schedule
 from datetime import datetime, timedelta
 import os
+import sys
+import logging
+import traceback
+from datetime import datetime, timedelta
+from pathlib import Path
 
-def clock_in():
-
+def clock_in(debug):
     chrome_options = Options()
     chrome_options.add_argument("--disable-infobars")  # Disable infobars
     chrome_options.add_argument("--disable-extensions")  # Disable extensions
     chrome_options.add_argument("--disable-notifications")  # Disable extensions
     chrome_options.add_argument("--log-level=3")  # Suppress logs
     chrome_options.add_argument("--disable-search-engine-choice-screen") #Disable Choose Search Engine
+    chrome_options.add_argument("--headless=new")
+
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     # Add headless mode
 
@@ -95,9 +101,9 @@ def clock_in():
     clock_in_button = driver.find_element(By.CSS_SELECTOR, "[test-id='el-768782d1']")
     clock_in_button.click()
 
-    schedule_clock_out()
+    schedule_clock_out(debug)
 
-def schedule_clock_out():
+def schedule_clock_out(debug):
     """Schedule clock-out task for 8 hours later"""
     # Schedule clock-out for 8 hours later
     clock_out_time = datetime.now() + timedelta(hours=8)
@@ -105,88 +111,88 @@ def schedule_clock_out():
         pvdata = json.load(f)
     win_pwd = pvdata["windows_pwd"]
     task_name = f"SesameClockOut_{datetime.now().strftime('%Y%m%d_%H%M')}"
+    # Build paths and logger
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    clock_out_script = os.path.join(script_dir, "clock_out.py")
+
+    # Only set up logging if debug is enabled
+    logger = None
+    if debug:
+        log_path = os.path.join(script_dir, 'clock_in_schedule.log')
+        logger = logging.getLogger('clock_in')
+        if not logger.handlers:
+            formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+            fh = logging.FileHandler(log_path, encoding='utf-8')
+            fh.setLevel(logging.DEBUG)
+            fh.setFormatter(formatter)
+            sh = logging.StreamHandler()
+            sh.setLevel(logging.INFO)
+            sh.setFormatter(formatter)
+            logger.addHandler(fh)
+            logger.addHandler(sh)
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger = logging.getLogger('clock_in')
+        logger.setLevel(logging.CRITICAL)  # Suppress all logs below CRITICAL
 
     try:
-        # Get the path to clock_out.py
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        clock_out_script = os.path.join(script_dir, "clock_out.py")
+        python_exe = sys.executable
+        username = os.environ['USERNAME']
         
-        # Simplified PowerShell command - no complex escaping
-        ps_command = f'''
-$action = New-ScheduledTaskAction -Execute "python.exe" -Argument "{clock_out_script}" -WorkingDirectory "{script_dir}"
-$trigger = New-ScheduledTaskTrigger -Once -At "{clock_out_time.strftime('%H:%M')}"
-$principal = New-ScheduledTaskPrincipal -UserId "{os.environ['USERNAME']}" -LogonType Password -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -WakeToRun `
-    -AllowHardTerminate `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
-    -MultipleInstances IgnoreNew
+        # Use schtasks.exe which is more reliable for run-when-user-logs-out scenarios
+        # Format: /ST HH:MM (24-hour, no date needed - schtasks defaults to today)
+        scheduled_time = clock_out_time.strftime('%H:%M')
+        
+        if debug:
+            logger.info('Scheduling task via schtasks.exe for %s', scheduled_time)
+            logger.debug('Task name: %s', task_name)
+            logger.debug('Python executable: %s', python_exe)
+            logger.debug('Script: %s', clock_out_script)
+            logger.debug('Working dir: %s', script_dir)
+        
+        # Create the scheduled task using schtasks which handles credentials better
+        # Note: Omit /sd (start date) - schtasks defaults to today, avoiding locale date format issues
+        cmd = [
+            'schtasks', '/create', 
+            '/tn', task_name,
+            '/tr', f'"{python_exe}" "{clock_out_script}"',
+            '/sc', 'once',
+            '/st', scheduled_time,
+            '/ru', username,
+            '/rp', win_pwd,
+            '/rl', 'limited',
+            '/f'  # Force overwrite if exists
+        ]
+        
+        if debug:
+            logger.debug('Running schtasks command: %s', ' '.join(cmd))
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        if debug:
+            logger.debug('schtasks returncode=%s', result.returncode)
+            logger.debug('schtasks stdout:\n%s', result.stdout)
+            logger.debug('schtasks stderr:\n%s', result.stderr)
+        
+        if result.returncode != 0:
+            if debug:
+                ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+                out_file = os.path.join(script_dir, f'schtasks_stdout_{ts}.log')
+                err_file = os.path.join(script_dir, f'schtasks_stderr_{ts}.log')
+                with open(out_file, 'w', encoding='utf-8') as f:
+                    f.write(result.stdout or '')
+                with open(err_file, 'w', encoding='utf-8') as f:
+                    f.write(result.stderr or '')
+                logger.error('schtasks failed (code %s). Stdout: %s, Stderr: %s', result.returncode, out_file, err_file)
+            return False
 
-Register-ScheduledTask -TaskName "{task_name}" `
-    -Action $action `
-    -Trigger $trigger `
-    -Principal $principal `
-    -Settings $settings `
-    -Password "{win_pwd}" `
-    -Force
+        if debug:
+            logger.info("✓ SUCCESS: Task '%s' scheduled for today at %s", task_name, scheduled_time)
+        return True
 
-# Verify the task was created
-$task = Get-ScheduledTask -TaskName "{task_name}"
-Write-Host "Task '$taskName' scheduled for {clock_out_time.strftime('%H:%M')}"
-Write-Host "Logon type: $($task.Principal.LogonType)"
-Write-Host "Will run whether user is logged in or not: YES"
-'''
-        # Debug: Print the command
-        print("Running PowerShell command...")
-        
-        # Run PowerShell
-        result = subprocess.run(['powershell', '-Command', ps_command],
-                                capture_output=True, 
-                                text=True,
-                                encoding='utf-8',
-                                errors='ignore')
-        
-        print(f"PowerShell stdout: {result.stdout}")
-        print(f"PowerShell stderr: {result.stderr}")
-        print(f"Return code: {result.returncode}")
-        
-        if result.returncode == 0:
-            print(f"\n✓ SUCCESS: Task '{task_name}' scheduled for {clock_out_time}")
-            return True
-            
     except Exception as e:
-        print(f"PowerShell error: {e}")
+        if debug:
+            logger.exception('Task scheduling error: %s', e)
+            tb_file = os.path.join(script_dir, f'schedule_exception_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+            with open(tb_file, 'w', encoding='utf-8') as f:
+                f.write(traceback.format_exc())
+            logger.error('Wrote traceback to %s', tb_file)
         return False
-
-    
-    # Create a batch file for Windows Task Scheduler
-    # if os.name == 'nt':  # Windows
-    #     bat_content = f"""
-    #     @echo off
-    #     cd /d "C:\\Git\\sesame-auto-login"
-    #     python clock_out.py
-    #     """
-        
-    #     with open('clock_out.bat', 'w') as f:
-    #         f.write(bat_content)
-        
-    #     # Schedule task (Windows)
-    #     # subprocess.run([
-    #     #    'schtasks', '/create', '/tn', 'SesametimeClockOut',
-    #     #    '/tr', f'C:\\Git\\sesame-auto-login\\clock_out.bat',
-    #     #    '/sc', 'once', '/st', clock_out_time.strftime('%H:%M'),
-    #     #    '/sd', clock_out_time.strftime('%m/%d/%Y')
-    #     # ])
-    #     at_time = clock_out_time.strftime('%H:%M %m/%d/%Y')
-    #     batch_path = 'C:/Git/sesame-auto-login/clock_out.bat'
-
-    #     # For Git Bash
-    #     subprocess.run([
-    #         'bash', '-c',
-    #         f'echo "cmd /c \'{batch_path}\'" | at {at_time}'
-    #     ])
-
-    print(f"Scheduled clock-out for {clock_out_time}")

@@ -1,7 +1,15 @@
 import clock_in
+import sys
+
 def main():
-    #al.clock_login()
-    clock_in.clock_in()
+    clock_in.clock_in(debug=True)
+    
+def force_clockout():
+    import clock_out
+    clock_out.clock_out(debug=True)    
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "-force-clockout":
+        force_clockout()
+    else:
+        main()
