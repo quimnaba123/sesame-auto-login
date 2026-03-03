@@ -35,4 +35,6 @@ TBD
 Contributions are welcome! Please submit a pull request or open an issue for any bug fixes or improvements.
 
 ## Future enhancements
-- Add headless mode for chrome drivers
+- Change task creation to powershell to customize task options:
+-- Start whenever possible if it couldn't run. Now only works when AC power is on.
+-- Stop the task if it's no longer run after 1h.
