@@ -20,13 +20,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 def clock_in(debug):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_path = os.path.join(script_dir, 'clock_in_schedule.log')
+    logger = logging.getLogger('clock_in')
     chrome_options = Options()
+    if not debug:
+        chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-infobars")  # Disable infobars
     chrome_options.add_argument("--disable-extensions")  # Disable extensions
     chrome_options.add_argument("--disable-notifications")  # Disable extensions
     chrome_options.add_argument("--log-level=3")  # Suppress logs
     chrome_options.add_argument("--disable-search-engine-choice-screen") #Disable Choose Search Engine
-    chrome_options.add_argument("--headless=new")
 
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     # Add headless mode
@@ -96,10 +100,40 @@ def clock_in(debug):
     wait.until(EC.element_to_be_clickable((By.ID, "btn-login-login")))
     clock_in_button=driver.find_element(By.ID, "btn-login-login").click()
     
-    #Start Sesame timer
+    # Start Sesame timer
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[test-id='el-768782d1']")))
     clock_in_button = driver.find_element(By.CSS_SELECTOR, "[test-id='el-768782d1']")
-    clock_in_button.click()
+    # Wait a moment to verify
+    time.sleep(1)
+    # Try multiple click methods
+    try:
+        # Method 1: Regular click
+        clock_in_button.click()
+        logger.info('Clicked clock-in button (method 1)')
+    except Exception as e1:
+        logger.warning('Regular click failed: %s', e1)
+        try:
+            # Method 2: JavaScript click
+            driver.execute_script("arguments[0].click();", clock_in_button)
+            logger.info('Clicked clock-in button (method 2 - JavaScript)')
+        except Exception as e2:
+            logger.warning('JavaScript click failed: %s', e2)
+            
+            try:
+                # Method 3: ActionChains
+                from selenium.webdriver.common.action_chains import ActionChains
+                ActionChains(driver).move_to_element(clock_in_button).click().perform()
+                logger.info('Clicked clock-in button (method 3 - ActionChains)')
+            except Exception as e3:
+                logger.warning('ActionChains click failed: %s', e3)
+                
+                try:
+                    # Method 4: Click with offset (sometimes helps with overlays)
+                    ActionChains(driver).move_to_element_with_offset(clock_in_button, 5, 5).click().perform()
+                    logger.info('Clicked clock-in button (method 4 - offset click)')
+                except Exception as e4:
+                    logger.error('All click methods failed for clock-in button')
+                    raise e4
 
     schedule_clock_out(debug)
 
@@ -161,7 +195,8 @@ def schedule_clock_out(debug):
             '/ru', username,
             '/rp', win_pwd,
             '/rl', 'limited',
-            '/f'  # Force overwrite if exists
+            '/f',  # Force overwrite if exists
+            '/du', '01:00'
         ]
         
         if debug:

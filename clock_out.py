@@ -18,6 +18,7 @@ def clock_out(debug=False):
     # Prepare logging only if debug is enabled
     script_dir = os.path.dirname(os.path.abspath(__file__))
     logger = logging.getLogger('clock_out')
+    chrome_options = Options()
     
     if debug:
         log_path = os.path.join(script_dir, 'clock_out.log')
@@ -35,7 +36,6 @@ def clock_out(debug=False):
     else:
         logger.setLevel(logging.CRITICAL)  # Suppress all logs
 
-    chrome_options = Options()
     # Run in headless mode so the scheduled task can run without an interactive session
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
