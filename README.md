@@ -35,6 +35,5 @@ TBD
 Contributions are welcome! Please submit a pull request or open an issue for any bug fixes or improvements.
 
 ## Future enhancements
-- Change task creation to powershell to customize task options:
--- Start whenever possible if it couldn't run. Now only works when AC power is on.
--- Stop the task if it's no longer run after 1h.
+- Check if the script is run in multiple pcs, skip 2nd runs.
+- Add documentation to add the script to services run after pc boot up.
