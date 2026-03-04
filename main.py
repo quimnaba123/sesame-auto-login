@@ -9,7 +9,7 @@ def force_clockout():
     clock_out.clock_out(debug=False)
 
 def create_task():
-    clock_in.schedule_task(debug=False)    
+    clock_in.schedule_clock_out(debug=True)    
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "-force-clockout":

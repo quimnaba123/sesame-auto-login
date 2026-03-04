@@ -154,22 +154,6 @@ def schedule_clock_out(debug):
     if debug:
         log_path = os.path.join(script_dir, 'clock_in_schedule.log')
         logger = logging.getLogger('clock_in')
-        if not logger.handlers:
-            formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-            fh = logging.FileHandler(log_path, encoding='utf-8')
-            fh.setLevel(logging.DEBUG)
-            fh.setFormatter(formatter)
-            sh = logging.StreamHandler()
-            sh.setLevel(logging.INFO)
-            sh.setFormatter(formatter)
-            logger.addHandler(fh)
-            logger.addHandler(sh)
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger = logging.getLogger('clock_in')
-        logger.setLevel(logging.CRITICAL)  # Suppress all logs below CRITICAL
-
-    try:
         python_exe = sys.executable
         username = os.environ['USERNAME']
         
@@ -177,57 +161,53 @@ def schedule_clock_out(debug):
         # Format: /ST HH:MM (24-hour, no date needed - schtasks defaults to today)
         scheduled_time = clock_out_time.strftime('%H:%M')
         
-        if debug:
-            logger.info('Scheduling task via schtasks.exe for %s', scheduled_time)
-            logger.debug('Task name: %s', task_name)
-            logger.debug('Python executable: %s', python_exe)
-            logger.debug('Script: %s', clock_out_script)
-            logger.debug('Working dir: %s', script_dir)
-        
-        # Create the scheduled task using schtasks which handles credentials better
-        # Note: Omit /sd (start date) - schtasks defaults to today, avoiding locale date format issues
-        cmd = [
-            'schtasks', '/create', 
-            '/tn', task_name,
-            '/tr', f'"{python_exe}" "{clock_out_script}"',
-            '/sc', 'once',
-            '/st', scheduled_time,
-            '/ru', username,
-            '/rp', win_pwd,
-            '/rl', 'limited',
-            '/f',  # Force overwrite if exists
-            '/du', '01:00'
-        ]
-        
-        if debug:
-            logger.debug('Running schtasks command: %s', ' '.join(cmd))
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-        if debug:
-            logger.debug('schtasks returncode=%s', result.returncode)
-            logger.debug('schtasks stdout:\n%s', result.stdout)
-            logger.debug('schtasks stderr:\n%s', result.stderr)
-        
-        if result.returncode != 0:
-            if debug:
-                ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-                out_file = os.path.join(script_dir, f'schtasks_stdout_{ts}.log')
-                err_file = os.path.join(script_dir, f'schtasks_stderr_{ts}.log')
-                with open(out_file, 'w', encoding='utf-8') as f:
-                    f.write(result.stdout or '')
-                with open(err_file, 'w', encoding='utf-8') as f:
-                    f.write(result.stderr or '')
-                logger.error('schtasks failed (code %s). Stdout: %s, Stderr: %s', result.returncode, out_file, err_file)
-            return False
 
-        if debug:
-            logger.info("✓ SUCCESS: Task '%s' scheduled for today at %s", task_name, scheduled_time)
-        return True
+    # Use PowerShell to create the task with all the settings you want
+    ps_command = f"""
+        $action = New-ScheduledTaskAction -Execute '{python_exe}' -Argument '{clock_out_script}' -WorkingDirectory '{script_dir}'
+        $trigger = New-ScheduledTaskTrigger -Once -At "{scheduled_time}"
+        $principal = New-ScheduledTaskPrincipal -UserId '{username}' -LogonType Interactive -RunLevel Limited
+        
+        # Settings that give us what we want:
+        # - Start when possible if missed (StartWhenAvailable)
+        # - Run regardless of AC power (both battery options)
+        # - Stop after 1 hour if not started (ExecutionTimeLimit)
+        # - Wake the computer to run (WakeToRun)
+        # - If task fails, retry up to 3 times (RestartOnFailure)
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable `
+            -WakeToRun `
+            -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
+            -RestartInterval (New-TimeSpan -Minutes 5) `
+            -RestartCount 3 `
+            -MultipleInstances IgnoreNew `
+            -Priority 7
+        
+        # Register the task
+        Register-ScheduledTask -TaskName '{task_name}' `
+            -Action $action `
+            -Trigger $trigger `
+            -Principal $principal `
+            -Settings $settings `
+            -Force
+        
+        # Display the settings for verification
+        $task = Get-ScheduledTask -TaskName '{task_name}'
+        Write-Host "Task '{task_name}' scheduled for today at {scheduled_time}"
+        Write-Host "Start when available (if missed): $($task.Settings.StartWhenAvailable)"
+        Write-Host "Run on battery: $($task.Settings.DisallowStartIfOnBatteries -eq $false)"
+        Write-Host "Execution time limit: $($task.Settings.ExecutionTimeLimit)"
+        Write-Host "Wake to run: $($task.Settings.WakeToRun)"
+    """
 
-    except Exception as e:
-        if debug:
-            logger.exception('Task scheduling error: %s', e)
-            tb_file = os.path.join(script_dir, f'schedule_exception_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-            with open(tb_file, 'w', encoding='utf-8') as f:
-                f.write(traceback.format_exc())
-            logger.error('Wrote traceback to %s', tb_file)
-        return False
+    # Execute PowerShell command
+    if debug:
+        logger.info('Scheduling task via PowerShell for %s with advanced settings', scheduled_time)
+        logger.debug('PowerShell command: %s', ps_command)
+
+    result = subprocess.run(
+        ['powershell', '-Command', ps_command],
+        capture_output=True, text=True, encoding='utf-8', errors='ignore'
+    )
