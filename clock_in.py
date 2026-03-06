@@ -148,19 +148,15 @@ def schedule_clock_out(debug):
     # Build paths and logger
     script_dir = os.path.dirname(os.path.abspath(__file__))
     clock_out_script = os.path.join(script_dir, "clock_out.py")
+    python_exe = sys.executable
+    username = os.environ['USERNAME']
+    scheduled_time = clock_out_time.strftime('%H:%M')
 
     # Only set up logging if debug is enabled
     logger = None
     if debug:
         log_path = os.path.join(script_dir, 'clock_in_schedule.log')
-        logger = logging.getLogger('clock_in')
-        python_exe = sys.executable
-        username = os.environ['USERNAME']
-        
-        # Use schtasks.exe which is more reliable for run-when-user-logs-out scenarios
-        # Format: /ST HH:MM (24-hour, no date needed - schtasks defaults to today)
-        scheduled_time = clock_out_time.strftime('%H:%M')
-        
+        logger = logging.getLogger('clock_in')        
 
     # Use PowerShell to create the task with all the settings you want
     ps_command = f"""

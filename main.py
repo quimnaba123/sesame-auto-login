@@ -1,5 +1,6 @@
 import clock_in
 import sys
+import install
 
 def main():
     clock_in.clock_in(debug=False)
@@ -12,7 +13,7 @@ def create_task():
     clock_in.schedule_clock_out(debug=False)    
 
 if __name__ == "__main__":
-     """Main function with interactive prompt"""
+    """Main function with interactive prompt"""
     print("\n" + "="*50)
     print("🕒 Sesame Time Clock-In System")
     print("="*50)
@@ -20,11 +21,9 @@ if __name__ == "__main__":
     # Check for command line arguments first
     if len(sys.argv) > 1:
         if sys.argv[1] == "--install" or sys.argv[1] == "-install":
-            install_startup_task()
-            return
+            install.install_startup_task()
         elif sys.argv[1] == "--uninstall" or sys.argv[1] == "-uninstall":
-            uninstall_startup_task()
-            return
+            install.uninstall_startup_task()
         elif sys.argv[1] == "-force-clockout" or sys.argv[1] == "--force-clockout":
             force_clockout()
         elif sys.argv[1] == "-create-task" or sys.argv[1] == "--create-task":
@@ -37,7 +36,6 @@ if __name__ == "__main__":
             print("  --create-task  Create clock-out task for 8 hours later (for testing)")
             print("  --help       Show this help message")
             print("\nRun without arguments to clock in normally.\n")
-            return
     
     # Interactive prompt
     print("\nDo you want to start the Sesame timer now?")
@@ -50,18 +48,18 @@ if __name__ == "__main__":
     
     if choice == "1":
         print("\n⏰ Starting clock-in process...")
-        clock_in()
+        clock_in.clock_in(debug=False)
     elif choice == "2":
         print("\n👋 Goodbye!\n")
         sys.exit(0)
     elif choice == "3":
-        install_startup_task()
+        install.install_startup_task()
         # Ask if they want to clock in now too
         clock_now = input("\nDo you want to clock in now as well? (y/n): ").strip().lower()
         if clock_now == 'y':
-            clock_in()
+            clock_in.clock_in(debug=False)
     elif choice == "4":
-        uninstall_startup_task()
+        install_startup_task.uninstall_startup_task()
     else:
         print("\n❌ Invalid choice. Please run again.\n")
         sys.exit(1)

@@ -7,10 +7,11 @@ import json
 
 def install_startup_task():
     """Create scheduled task that runs at user logon"""
-    script_path = os.path.abspath(__file__)
+    #script_path = os.path.abspath(__file__)
+    script_path = 'C:\Git\sesame-auto-login\main.py'  # Change this to the actual path of your script
     python_exe = sys.executable
     username = os.environ['USERNAME']
-    task_name = "SesameClockIn_Startup"
+    task_name = "Sesame_AutoCheckin"
     
     # Get Windows password if needed (for logon type password)
     with open('PrivateData.json') as f:
@@ -20,10 +21,10 @@ def install_startup_task():
     ps_command = f"""
     $action = New-ScheduledTaskAction -Execute '{python_exe}' -Argument '"{script_path}"' -WorkingDirectory '{os.path.dirname(script_path)}'
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User '{username}'
-    $principal = New-ScheduledTaskPrincipal -UserId '{username}' -LogonType Password -RunLevel Limited
+    $principal = New-ScheduledTaskPrincipal -UserId '{username}' -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
     
-    Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Password '{win_pwd}' -Force
+    Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
     Write-Host "Task '{task_name}' created to run at logon"
     """
     
